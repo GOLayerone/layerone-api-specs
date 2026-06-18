@@ -1,0 +1,604 @@
+openapi: 3.1.0
+info:
+  title: Sign API
+  version: "1.0.0"
+  summary: Signature électronique eIDAS / PAdES — envoi, suivi, vérification d'identité et preuves juridiques.
+  description: |
+    API Sign de LayerOne — signature électronique **eIDAS / PAdES** : envoyez des
+    PDF à signer, suivez leur statut, vérifiez l'identité du signataire par SMS (OTP)
+    et récupérez les preuves juridiques (certificat de preuve, validation cryptographique).
+
+    ### Authentification
+    Toutes les requêtes nécessitent une clé API dans l'en-tête `X-API-Key`.
+    Créez un compte gratuit sur https://dev.layerone.fr (10 signatures offertes/mois),
+    puis générez une clé Sign dans l'onglet « Clés API ».
+
+    ### Principe d'utilisation
+    1. (Optionnel) Détectez les emplacements de signature balisés (`[[...]]`) dans le PDF.
+    2. Envoyez le PDF à signer : un email d'invitation est adressé au signataire.
+    3. (Optionnel) Vérifiez l'identité par SMS (envoi puis vérification d'un code OTP).
+    4. Suivez le statut, téléchargez le PDF signé, récupérez le certificat de preuve
+       et validez l'intégrité cryptographique de la signature.
+  contact:
+    name: LayerOne
+    url: https://dev.layerone.fr
+  license:
+    name: Proprietary
+servers:
+  - url: https://sign.layerone.fr
+    description: Production
+security:
+  - apiKeyHeader: []
+tags:
+  - name: Signature
+    description: Envoi de documents à signer et annulation des demandes.
+  - name: Champs
+    description: Détection des emplacements de signature dans un PDF.
+  - name: Vérification
+    description: Vérification d'identité du signataire par SMS (OTP).
+  - name: Suivi
+    description: Statut, téléchargement du document signé, certificat de preuve et validation.
+paths:
+  /v1/documents/send:
+    post:
+      operationId: sendForSignature
+      tags:
+        - Signature
+      summary: Envoyer un document à signer
+      description: >-
+        Envoie un PDF à signer électroniquement (eIDAS / PAdES). Crée la demande
+        et envoie l'email d'invitation au signataire.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendForSignatureRequest'
+      responses:
+        '200':
+          description: Demande de signature créée, invitation envoyée.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendForSignatureResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/documents/detect-fields:
+    post:
+      operationId: detectFields
+      tags:
+        - Champs
+      summary: Détecter les champs de signature
+      description: >-
+        Analyse un PDF et retourne les emplacements de signature balisés
+        ([[...]]) détectés, avant de l'envoyer à la signature.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectFieldsRequest'
+      responses:
+        '200':
+          description: Champs de signature détectés.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectFieldsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/documents/{document_id}/download:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: downloadSignedDocument
+      tags:
+        - Suivi
+      summary: Télécharger le document signé
+      description: >-
+        Récupère le PDF final signé (signature PAdES qualifiée et certificat de
+        preuve intégré). Disponible une fois le document complété. La réponse
+        contient le PDF encodé en base64 dans le champ `pdf_base64`.
+      responses:
+        '200':
+          description: Document signé disponible (PDF en base64 + métadonnées).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadSignedDocumentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/documents/{document_id}:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: getDocumentStatus
+      tags:
+        - Suivi
+      summary: Consulter le statut d'une signature
+      description: >-
+        Consulte l'état d'avancement d'une demande de signature
+        (en attente, signé, refusé…).
+      responses:
+        '200':
+          description: Statut de la demande de signature.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      operationId: cancelDocument
+      tags:
+        - Signature
+      summary: Annuler une demande de signature
+      description: >-
+        Annule une demande de signature encore en cours. Impossible si le
+        document est déjà signé.
+      responses:
+        '200':
+          description: Demande de signature annulée.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelDocumentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Le document est déjà signé et ne peut plus être annulé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/otp/request:
+    post:
+      operationId: sendOtp
+      tags:
+        - Vérification
+      summary: Envoyer un code de vérification (SMS)
+      description: >-
+        Envoie un code OTP par SMS au signataire pour vérifier son identité
+        avant la signature.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendOtpRequest'
+      responses:
+        '200':
+          description: Code OTP envoyé par SMS.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendOtpResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/otp/verify:
+    post:
+      operationId: verifyOtp
+      tags:
+        - Vérification
+      summary: Vérifier un code de vérification (SMS)
+      description: >-
+        Valide le code OTP saisi par le signataire et retourne l'URL de
+        signature si le code est correct.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyOtpRequest'
+      responses:
+        '200':
+          description: Résultat de la vérification du code OTP.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyOtpResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/documents/{document_id}/audit:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: getAuditCertificate
+      tags:
+        - Suivi
+      summary: Récupérer le certificat de preuve
+      description: >-
+        Récupère le certificat de preuve juridique complet : qui a signé, depuis
+        quelle IP, à quelle heure, avec la chaîne de hachage cryptographique.
+      responses:
+        '200':
+          description: Certificat de preuve juridique.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditCertificateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /v1/documents/{document_id}/validate:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      operationId: validateSignature
+      tags:
+        - Suivi
+      summary: Vérifier l'intégrité de la signature
+      description: >-
+        Vérifie cryptographiquement que la signature PAdES du document est
+        intègre et valide.
+      responses:
+        '200':
+          description: Résultat de la validation cryptographique de la signature.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateSignatureResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Clé API Sign, à générer dans l'onglet « Clés API » sur https://dev.layerone.fr
+  parameters:
+    DocumentId:
+      name: document_id
+      in: path
+      required: true
+      description: Identifiant du document de signature.
+      schema:
+        type: string
+  schemas:
+    Signer:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          description: Nom du signataire.
+        email:
+          type: string
+          format: email
+          description: Email du signataire.
+        role:
+          type: string
+          description: Rôle du signataire.
+          default: Client
+        phone:
+          type: string
+          description: >-
+            Téléphone du signataire au format international (+33…). Requis
+            seulement pour la vérification par SMS (OTP).
+    SendForSignatureRequest:
+      type: object
+      required:
+        - pdf_base64
+        - document_name
+        - signers
+      properties:
+        pdf_base64:
+          type: string
+          description: Contenu du document PDF encodé en base64.
+        document_name:
+          type: string
+          description: Nom du document.
+        signers:
+          type: array
+          description: Liste des signataires.
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Signer'
+        note:
+          type: string
+          description: Message d'accompagnement adressé au signataire.
+        expiry_days:
+          type: integer
+          description: Délai d'expiration de la demande en jours.
+          default: 30
+        company_name:
+          type: string
+          description: Nom de la société affichée au signataire.
+    SendForSignatureResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indique si l'envoi a réussi.
+        document_id:
+          type: string
+          description: ID du document créé.
+        signing_urls:
+          type: object
+          description: URLs de signature, indexées par rôle de signataire.
+          additionalProperties:
+            type: string
+            format: uri
+    DetectFieldsRequest:
+      type: object
+      required:
+        - pdf_base64
+      properties:
+        pdf_base64:
+          type: string
+          description: Contenu du document PDF encodé en base64.
+    DetectFieldsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indique si l'analyse a réussi.
+        fields_count:
+          type: integer
+          description: Nombre de champs détectés.
+        fields:
+          type: array
+          description: Champs de signature détectés.
+          items:
+            $ref: '#/components/schemas/DetectedField'
+    DetectedField:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nom du champ balisé.
+        type:
+          type: string
+          description: Type de champ (ex SIGNATURE).
+        page:
+          type: integer
+          description: Numéro de page où le champ est situé.
+        role:
+          type: string
+          description: Rôle associé au champ.
+    DownloadSignedDocumentResponse:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Titre du document signé.
+        size_bytes:
+          type: integer
+          description: Taille du PDF en octets.
+        pdf_base64:
+          type: string
+          description: PDF signé final encodé en base64.
+    CancelDocumentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indique si l'annulation a réussi.
+        document_id:
+          type: string
+          description: ID du document annulé.
+        message:
+          type: string
+          description: Message décrivant le résultat.
+    SendOtpRequest:
+      type: object
+      required:
+        - document_id
+        - signer_email
+        - signer_phone
+      properties:
+        document_id:
+          type: string
+          description: ID du document.
+        signer_email:
+          type: string
+          format: email
+          description: Email du signataire.
+        signer_phone:
+          type: string
+          description: Téléphone du signataire au format international (+33…).
+        document_name:
+          type: string
+          description: Nom du document (affiché dans le SMS).
+    SendOtpResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indique si le code a été envoyé.
+        message:
+          type: string
+          description: Message décrivant le résultat.
+    VerifyOtpRequest:
+      type: object
+      required:
+        - document_id
+        - signer_email
+        - code
+      properties:
+        document_id:
+          type: string
+          description: ID du document.
+        signer_email:
+          type: string
+          format: email
+          description: Email du signataire.
+        code:
+          type: string
+          description: Code reçu par SMS.
+    VerifyOtpResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indique si le code est valide.
+        message:
+          type: string
+          description: Message décrivant le résultat.
+        signing_url:
+          type: string
+          format: uri
+          description: URL de signature retournée si le code est correct.
+    DocumentStatusResponse:
+      type: object
+      description: >-
+        État d'avancement de la demande. Les champs exacts dépendent du document ;
+        `id` et `status` sont toujours présents.
+      properties:
+        id:
+          type: string
+          description: ID du document.
+        status:
+          type: string
+          description: Statut courant (ex PENDING, COMPLETED, REJECTED).
+      additionalProperties: true
+    AuditCertificateResponse:
+      type: object
+      description: >-
+        Certificat de preuve juridique. Les champs exacts dépendent du document ;
+        `id`, `status` et `compliance` sont les plus courants.
+      properties:
+        id:
+          type: string
+          description: ID du document.
+        status:
+          type: string
+          description: Statut du document.
+        compliance:
+          type: string
+          description: Niveau de conformité (ex eIDAS - Niveau 2).
+      additionalProperties: true
+    ValidateSignatureResponse:
+      type: object
+      description: >-
+        Résultat de la validation cryptographique. Les champs exacts dépendent du
+        document ; `id` et `source` sont les plus courants.
+      properties:
+        id:
+          type: string
+          description: ID du document.
+        source:
+          type: string
+          description: Source de la validation (ex pades_local).
+      additionalProperties: true
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Message d'erreur lisible.
+  responses:
+    BadRequest:
+      description: Requête invalide (paramètre manquant ou mal formé).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Clé API manquante ou invalide.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Accès refusé pour cette clé API.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Document introuvable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Quota dépassé ou trop de requêtes simultanées.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Erreur interne du serveur.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

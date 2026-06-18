@@ -1,0 +1,626 @@
+openapi: 3.1.0
+info:
+  title: DocX API
+  version: "1.0.0"
+  summary: Génération de documents, PDF et factures électroniques Factur-X à partir de modèles Word.
+  description: |
+    API DocX de LayerOne — génération de documents et de PDF à partir de modèles Word
+    (.docx) : factures électroniques **Factur-X** (réforme 2026), devis, contrats,
+    attestations, et gestion versionnée des modèles.
+
+    ### Authentification
+    Toutes les requêtes nécessitent une clé API dans l'en-tête `X-API-Key`.
+    Créez un compte gratuit sur https://dev.layerone.fr (20 documents offerts/mois),
+    puis générez une clé DocX dans l'onglet « Clés API ».
+
+    ### Principe d'utilisation
+    1. Déposez un modèle Word contenant des balises `{{ ... }}` (action « Déposer un modèle »).
+    2. Récupérez l'`template_id` retourné.
+    3. Générez vos documents (PDF / DOCX) ou vos factures Factur-X à partir de cet ID
+       et de données JSON.
+  contact:
+    name: LayerOne
+    url: https://dev.layerone.fr
+  license:
+    name: Proprietary
+servers:
+  - url: https://docx.layerone.fr
+    description: Production
+security:
+  - apiKeyHeader: []
+tags:
+  - name: Génération
+    description: Génération de documents et de factures à partir de modèles.
+  - name: Modèles
+    description: Dépôt, mise à jour, téléchargement et suppression de modèles Word.
+  - name: Versions
+    description: Historique versionné des modèles (archivage, restauration, téléchargement).
+  - name: Compte
+    description: Quota et statistiques d'usage de la clé API.
+paths:
+  /render-facturx:
+    post:
+      operationId: renderFacturx
+      tags:
+        - Génération
+      summary: Générer une facture Factur-X
+      description: >-
+        Génère une facture électronique conforme à la réforme 2026
+        (Factur-X / PDF-A3) à partir d'un modèle déposé et de données JSON.
+        Renvoie le PDF généré.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RenderFacturxRequest'
+      responses:
+        '200':
+          description: Facture Factur-X générée (PDF/A-3).
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /render-document:
+    post:
+      operationId: renderDocument
+      tags:
+        - Génération
+      summary: Générer un document
+      description: >-
+        Génère un document (PDF ou DOCX) — devis, contrat, attestation —
+        à partir d'un modèle déposé et de données JSON. Renvoie le fichier généré.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RenderDocumentRequest'
+      responses:
+        '200':
+          description: Document généré (PDF ou DOCX selon `output_format`).
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /client/templates:
+    get:
+      operationId: listTemplates
+      tags:
+        - Modèles
+      summary: Trouver un modèle
+      description: >-
+        Liste les modèles déposés pour la clé API. Le filtrage par nom est
+        effectué côté client à partir de la liste retournée.
+      responses:
+        '200':
+          description: Liste des modèles déposés.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      operationId: uploadTemplate
+      tags:
+        - Modèles
+      summary: Déposer un modèle
+      description: >-
+        Dépose un modèle Word (.docx) sur le compte pour pouvoir le réutiliser
+        ensuite par son ID. Retourne l'ID du modèle et les balises détectées.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadTemplateRequest'
+      responses:
+        '200':
+          description: Modèle déposé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadTemplateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /client/templates/{template_id}:
+    parameters:
+      - $ref: '#/components/parameters/TemplateId'
+    get:
+      operationId: downloadTemplate
+      tags:
+        - Modèles
+      summary: Télécharger un modèle
+      description: Télécharge le fichier .docx d'un modèle déposé.
+      responses:
+        '200':
+          description: Fichier .docx du modèle.
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    put:
+      operationId: updateTemplate
+      tags:
+        - Modèles
+      summary: Mettre à jour un modèle
+      description: >-
+        Remplace un modèle existant par une nouvelle version. L'ancienne version
+        est automatiquement archivée (rollback possible).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UpdateTemplateRequest'
+      responses:
+        '200':
+          description: Modèle mis à jour, ancienne version archivée.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateTemplateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      operationId: deleteTemplate
+      tags:
+        - Modèles
+      summary: Supprimer un modèle
+      description: Supprime définitivement un modèle et tout son historique de versions.
+      responses:
+        '200':
+          description: Modèle supprimé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteTemplateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /client/templates/{template_id}/versions:
+    parameters:
+      - $ref: '#/components/parameters/TemplateId'
+    get:
+      operationId: listTemplateVersions
+      tags:
+        - Versions
+      summary: Lister les versions d'un modèle
+      description: Liste l'historique des versions archivées d'un modèle.
+      responses:
+        '200':
+          description: Historique des versions archivées.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateVersionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /client/templates/{template_id}/versions/{version_id}:
+    parameters:
+      - $ref: '#/components/parameters/TemplateId'
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      operationId: downloadTemplateVersion
+      tags:
+        - Versions
+      summary: Télécharger une version de modèle
+      description: Télécharge le fichier .docx d'une version archivée d'un modèle.
+      responses:
+        '200':
+          description: Fichier .docx de la version archivée.
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /client/templates/{template_id}/restore/{version_id}:
+    parameters:
+      - $ref: '#/components/parameters/TemplateId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      operationId: restoreTemplateVersion
+      tags:
+        - Versions
+      summary: Restaurer une version de modèle
+      description: >-
+        Restaure une version archivée comme version active du modèle. La version
+        courante est archivée avant écrasement.
+      responses:
+        '200':
+          description: Version restaurée.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestoreTemplateVersionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /usage-stats:
+    get:
+      operationId: getUsageStats
+      tags:
+        - Compte
+      summary: Consulter le quota et l'usage
+      description: >-
+        Retourne le plan, le quota (limite / utilisé / restant) et les
+        statistiques d'usage de la clé API.
+      responses:
+        '200':
+          description: Statistiques d'usage et quota.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageStatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Clé API DocX, à générer dans l'onglet « Clés API » sur https://dev.layerone.fr
+  parameters:
+    TemplateId:
+      name: template_id
+      in: path
+      required: true
+      description: Identifiant du modèle.
+      schema:
+        type: string
+    VersionId:
+      name: version_id
+      in: path
+      required: true
+      description: Identifiant numérique de la version archivée.
+      schema:
+        type: integer
+  schemas:
+    RenderFacturxRequest:
+      type: object
+      required:
+        - template_id
+        - json_data
+      properties:
+        template_id:
+          type: string
+          description: Identifiant d'un modèle déjà déposé via « Déposer un modèle ».
+        json_data:
+          type: string
+          description: >-
+            Données de la facture au format JSON (chaîne JSON), ex :
+            {"Npiece":"F2026-001","client":"ACME","total":1200}.
+        output_filename:
+          type: string
+          description: Nom du fichier PDF généré.
+          default: facture.pdf
+    RenderDocumentRequest:
+      type: object
+      required:
+        - template_id
+        - json_data
+      properties:
+        template_id:
+          type: string
+          description: Identifiant d'un modèle déjà déposé via « Déposer un modèle ».
+        json_data:
+          type: string
+          description: >-
+            Données du document au format JSON (chaîne JSON), ex :
+            {"client":"ACME","date":"2026-01-15","total":1200}.
+        output_format:
+          type: string
+          description: Format de sortie du document.
+          enum:
+            - pdf
+            - docx
+          default: pdf
+        output_filename:
+          type: string
+          description: Nom du fichier généré.
+          default: document.pdf
+    UploadTemplateRequest:
+      type: object
+      required:
+        - template
+      properties:
+        template:
+          type: string
+          format: binary
+          description: >-
+            Fichier Word (.docx) à déposer (contient des balises {{ ... }}).
+            Type MIME attendu :
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    UpdateTemplateRequest:
+      type: object
+      required:
+        - template
+      properties:
+        template:
+          type: string
+          format: binary
+          description: Nouveau fichier Word (.docx) qui remplace la version courante.
+    UploadTemplateResponse:
+      type: object
+      properties:
+        template_id:
+          type: string
+          description: ID du modèle créé.
+        name:
+          type: string
+          description: Nom du modèle.
+        status:
+          type: string
+          description: Statut de l'opération.
+          examples:
+            - created
+        detected_tags:
+          type: array
+          description: Balises {{ ... }} détectées dans le modèle.
+          items:
+            type: string
+    UpdateTemplateResponse:
+      type: object
+      properties:
+        template_id:
+          type: string
+          description: ID du modèle.
+        status:
+          type: string
+          description: Statut de l'opération.
+          examples:
+            - updated
+        archived_version:
+          type: integer
+          description: Numéro de la version archivée.
+    DeleteTemplateResponse:
+      type: object
+      properties:
+        template_id:
+          type: string
+          description: ID du modèle supprimé.
+        status:
+          type: string
+          description: Statut de l'opération.
+          examples:
+            - deleted
+    RestoreTemplateVersionResponse:
+      type: object
+      properties:
+        template_id:
+          type: string
+          description: ID du modèle.
+        restored_from_version_id:
+          type: integer
+          description: ID de la version qui a été restaurée.
+        status:
+          type: string
+          description: Statut de l'opération.
+          examples:
+            - restored
+    TemplateList:
+      type: object
+      properties:
+        templates:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateSummary'
+    TemplateSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID du modèle.
+        name:
+          type: string
+          description: Nom du modèle.
+        size:
+          type: integer
+          description: Taille du fichier en octets.
+        client_name:
+          type: string
+          description: Nom du client propriétaire.
+    TemplateVersionList:
+      type: object
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateVersion'
+    TemplateVersion:
+      type: object
+      properties:
+        version_id:
+          type: integer
+          description: ID de la version archivée.
+        version_number:
+          type: integer
+          description: Numéro de version.
+        content_hash:
+          type: string
+          description: Empreinte (hash) du contenu de la version.
+        original_name:
+          type: string
+          description: Nom d'origine du fichier.
+        size_bytes:
+          type: integer
+          description: Taille en octets.
+        archived_at:
+          type: string
+          format: date-time
+          description: Date d'archivage de la version.
+    UsageStatsResponse:
+      type: object
+      properties:
+        stats:
+          type: object
+          properties:
+            plan:
+              type: string
+              description: Plan de l'abonnement.
+            quota:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  description: Quota total de la période.
+                used:
+                  type: integer
+                  description: Quota déjà consommé.
+                remaining:
+                  type: integer
+                  description: Quota restant.
+            rate_limit:
+              type: integer
+              description: Limite de débit (requêtes autorisées).
+            current_concurrent:
+              type: integer
+              description: Nombre de requêtes simultanées en cours.
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Message d'erreur lisible.
+  responses:
+    BadRequest:
+      description: Requête invalide (paramètre manquant ou mal formé).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Clé API manquante ou invalide.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Accès refusé pour cette clé API.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource introuvable (modèle ou version inexistant).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: Quota dépassé ou trop de requêtes simultanées.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Erreur interne du serveur.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
