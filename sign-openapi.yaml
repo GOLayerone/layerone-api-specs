@@ -2,11 +2,23 @@ openapi: 3.1.0
 info:
   title: Sign API
   version: "1.0.0"
-  summary: Signature électronique eIDAS / PAdES — envoi, suivi, vérification d'identité et preuves juridiques.
+  summary: Signature électronique SES (eIDAS art. 25) / PAdES-B ou PAdES-B-T — envoi, suivi, OTP optionnel et preuves.
   description: |
-    API Sign de LayerOne — signature électronique **eIDAS / PAdES** : envoyez des
-    PDF à signer, suivez leur statut, vérifiez l'identité du signataire par SMS (OTP)
-    et récupérez les preuves juridiques (certificat de preuve, validation cryptographique).
+    API Sign de LayerOne — signature électronique **SES** (simple electronic
+    signature, eIDAS art. 25). LayerOne Sign does **not** claim AES/QES :
+    ce n'est ni une signature avancée, ni une signature qualifiée, ni une
+    « PAdES qualifiée ».
+
+    Niveau réel : **SES**. OTP SMS optionnel → **SES+OTP**. Profil PAdES :
+    **PAdES-B** ou **PAdES-B-T** (horodatage TSA DFN-CERT RFC 3161 dans le CMS).
+    Ce n'est pas du PAdES-LTA.
+
+    Cachet : CA interne (`CN=LayerOne Signature`), sauf si un P12 AATL est
+    configuré. Aucune confiance Adobe / AATL n'est revendiquée par défaut.
+
+    Envoyez des PDF à signer, suivez leur statut, vérifiez l'identité du
+    signataire par SMS (OTP) et récupérez les preuves (certificat de preuve,
+    validation cryptographique).
 
     ### Authentification
     Toutes les requêtes nécessitent une clé API dans l'en-tête `X-API-Key`.
@@ -16,7 +28,7 @@ info:
     ### Principe d'utilisation
     1. (Optionnel) Détectez les emplacements de signature balisés (`[[...]]`) dans le PDF.
     2. Envoyez le PDF à signer : un email d'invitation est adressé au signataire.
-    3. (Optionnel) Vérifiez l'identité par SMS (envoi puis vérification d'un code OTP).
+    3. (Optionnel) Vérifiez l'identité par SMS (envoi puis vérification d'un code OTP) — SES+OTP.
     4. Suivez le statut, téléchargez le PDF signé, récupérez le certificat de preuve
        et validez l'intégrité cryptographique de la signature.
   contact:
@@ -46,8 +58,9 @@ paths:
         - Signature
       summary: Envoyer un document à signer
       description: >-
-        Envoie un PDF à signer électroniquement (eIDAS / PAdES). Crée la demande
-        et envoie l'email d'invitation au signataire.
+        Envoie un PDF à signer électroniquement (SES, eIDAS art. 25 ; profil
+        PAdES-B ou PAdES-B-T). Crée la demande et envoie l'email d'invitation
+        au signataire.
       requestBody:
         required: true
         content:
@@ -112,9 +125,10 @@ paths:
         - Suivi
       summary: Télécharger le document signé
       description: >-
-        Récupère le PDF final signé (signature PAdES qualifiée et certificat de
-        preuve intégré). Disponible une fois le document complété. La réponse
-        contient le PDF encodé en base64 dans le champ `pdf_base64`.
+        Récupère le PDF final signé (SES, profil PAdES-B ou PAdES-B-T, et
+        certificat de preuve intégré). Disponible une fois le document
+        complété. La réponse contient le PDF encodé en base64 dans le champ
+        `pdf_base64`.
       responses:
         '200':
           description: Document signé disponible (PDF en base64 + métadonnées).
@@ -199,7 +213,7 @@ paths:
       summary: Envoyer un code de vérification (SMS)
       description: >-
         Envoie un code OTP par SMS au signataire pour vérifier son identité
-        avant la signature.
+        avant la signature (niveau SES+OTP, toujours SES — eIDAS art. 25).
       requestBody:
         required: true
         content:
@@ -296,8 +310,9 @@ paths:
         - Suivi
       summary: Vérifier l'intégrité de la signature
       description: >-
-        Vérifie cryptographiquement que la signature PAdES du document est
-        intègre et valide.
+        Vérifie cryptographiquement que la signature PAdES-B / PAdES-B-T du
+        document est intègre. Cette validation ne constitue pas un niveau
+        PAdES-LTA.
       responses:
         '200':
           description: Résultat de la validation cryptographique de la signature.
@@ -544,7 +559,7 @@ components:
           description: Statut du document.
         compliance:
           type: string
-          description: Niveau de conformité (ex eIDAS - Niveau 2).
+          description: Niveau de conformité (ex SES, eIDAS art. 25).
       additionalProperties: true
     ValidateSignatureResponse:
       type: object
