@@ -168,3 +168,7 @@ Dans tous les cas, le fichier YAML fournit les chemins, méthodes, paramètres e
   - Sign `downloadSignedDocument` renvoie un **JSON** contenant `pdf_base64`
     (le module Make décode ensuite le base64 côté client) — la spec reflète ce JSON, pas un binaire.
 - **Aucune clé API en dur** : seul le `securityScheme` `apiKeyHeader` est déclaré.
+- **Niveau eIDAS (Sign)** : SES (art. 25), éventuellement SES+OTP. Profil
+  PAdES-B ou PAdES-B-T (TSA DFN-CERT RFC 3161). Pas d'AES/QES, pas de
+  PAdES qualifiée, pas de PAdES-LTA. Cachet CA interne (`CN=LayerOne Signature`)
+  sauf P12 AATL configuré — pas de confiance Adobe par défaut.
